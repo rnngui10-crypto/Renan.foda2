@@ -1,29 +1,21 @@
 FROM node:20-slim
 
-# Instala Python3 + pip
 RUN apt-get update && \
     apt-get install -y python3 python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
-# Instala dependências Python para o serviço IQ Option
 RUN pip3 install requests websocket-client --break-system-packages
-
-# Instala pnpm (mesma versão do projeto)
-RUN npm install -g pnpm@10
 
 WORKDIR /app
 
-# Copia arquivos do workspace
-COPY . .
+# Copia o servidor API já buildado
+COPY artifacts/api-server/dist ./artifacts/api-server/dist
 
-# Instala dependências Node.js
-RUN pnpm install --no-frozen-lockfile
+# Copia o script Python (chamado em runtime pelo servidor)
+COPY artifacts/api-server/src/lib/iqoption_service.py ./artifacts/api-server/src/lib/iqoption_service.py
 
-# Build do frontend (BASE_PATH=/ para produção, PORT apenas para satisfazer o config)
-RUN BASE_PATH=/ PORT=3000 pnpm --filter @workspace/renan-foda run build
-
-# Build do servidor API
-RUN pnpm --filter @workspace/api-server run build
+# Copia o frontend já buildado
+COPY artifacts/renan-foda/dist/public ./artifacts/renan-foda/dist/public
 
 EXPOSE 3000
 
