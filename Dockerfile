@@ -17,7 +17,7 @@ WORKDIR /app
 COPY . .
 
 # Instala dependências Node.js
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Build do frontend (BASE_PATH=/ para produção, PORT apenas para satisfazer o config)
 RUN BASE_PATH=/ PORT=3000 pnpm --filter @workspace/renan-foda run build
