@@ -1,0 +1,605 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Configurar ícones
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// ============================================
+// TODAS AS ZONAS (waypoints completos)
+// ============================================
+const waypoints = [
+  { nome: "1060", lat: -22.5864745139672, lon: -50.2917291075556 },
+  { nome: "1061", lat: -22.4807458319578, lon: -50.2913202452617 },
+  { nome: "1064", lat: -22.4587517789557, lon: -50.3202357376767 },
+  { nome: "1066", lat: -22.4663498868441, lon: -50.318992158686 },
+  { nome: "1067", lat: -22.4707668441813, lon: -50.3161922931852 },
+  { nome: "1068", lat: -22.4687764593415, lon: -50.3318093593457 },
+  { nome: "1071", lat: -22.4643063391889, lon: -50.2869172691379 },
+  { nome: "1072", lat: -22.4571894172229, lon: -50.3432490339153 },
+  { nome: "1074", lat: -22.4550401779016, lon: -50.3279372318503 },
+  { nome: "1076", lat: -22.4531115406332, lon: -50.2733020252467 },
+  { nome: "1078", lat: -22.5802552462696, lon: -50.2858534669835 },
+  { nome: "1090", lat: -22.5688220974715, lon: -50.2778648880253 },
+  { nome: "1091", lat: -22.5712978036206, lon: -50.2631210733715 },
+  { nome: "1092", lat: -22.5770819072053, lon: -50.2701807095957 },
+  { nome: "1093", lat: -22.5794347566128, lon: -50.2777764796923 },
+  { nome: "1094", lat: -22.5896450135001, lon: -50.2701091444233 },
+  { nome: "1096", lat: -22.5753436341859, lon: -50.2482870927397 },
+  { nome: "1097", lat: -22.5822081336989, lon: -50.2586328019329 },
+  { nome: "1098", lat: -22.5869203444538, lon: -50.2523816316895 },
+  { nome: "1099", lat: -22.5918364854699, lon: -50.2499135019646 },
+  { nome: "1100", lat: -22.5967559873415, lon: -50.2541926038943 },
+  { nome: "1159", lat: -22.5636833569505, lon: -50.2421290418872 },
+  { nome: "1179", lat: -22.5350398987244, lon: -50.3303891062359 },
+  { nome: "1180", lat: -22.5377454876111, lon: -50.335451710776 },
+  { nome: "1181", lat: -22.5259682283379, lon: -50.3383142542611 },
+  { nome: "1228", lat: -22.5379299184939, lon: -50.2735072239546 },
+  { nome: "1229", lat: -22.4855248453789, lon: -50.2914000301455 },
+  { nome: "1230", lat: -22.4752683132592, lon: -50.2918724791104 },
+  { nome: "1231", lat: -22.4709342141805, lon: -50.3003187429236 },
+  { nome: "1233", lat: -22.5539312133142, lon: -50.2956305814873 },
+  { nome: "1234", lat: -22.5591490528657, lon: -50.2944853177595 },
+  { nome: "1235", lat: -22.5585516536243, lon: -50.2786187125246 },
+  { nome: "1236", lat: -22.5520277582497, lon: -50.2793825999939 },
+  { nome: "1237", lat: -22.5461796780738, lon: -50.2734827463542 },
+  { nome: "1238", lat: -22.5677235822055, lon: -50.2888896161242 },
+  { nome: "1242", lat: -22.4615706092036, lon: -50.3020287697896 },
+  { nome: "1243", lat: -22.5507809272645, lon: -50.235331583954 },
+  { nome: "1244", lat: -22.5300821474228, lon: -50.2391633482621 },
+  { nome: "1245", lat: -22.4764079296128, lon: -50.3062812911843 },
+  { nome: "1246", lat: -22.473615855151, lon: -50.2818571918317 },
+  { nome: "1249", lat: -22.5057683962395, lon: -50.2650539571133 },
+  { nome: "1250", lat: -22.503842381879, lon: -50.2698432446161 },
+  { nome: "1255", lat: -22.4507161436991, lon: -50.2984810662736 },
+  { nome: "1263", lat: -22.5394253988473, lon: -50.2351726119005 },
+  { nome: "1266", lat: -22.4951345985882, lon: -50.2521230650306 },
+  { nome: "1302", lat: -22.4586268185977, lon: -50.2791016274382 },
+  { nome: "1318", lat: -22.5579912743587, lon: -50.3206027938973 },
+  { nome: "1319", lat: -22.5620794864629, lon: -50.324007462223 },
+  { nome: "1320", lat: -22.5751027637447, lon: -50.3104451786103 },
+  { nome: "1321", lat: -22.5804990205498, lon: -50.3191278884158 },
+  { nome: "1324", lat: -22.4634240480309, lon: -50.3514837477954 },
+  { nome: "1325", lat: -22.5150966846456, lon: -50.2820005109509 },
+  { nome: "1326", lat: -22.5078465165721, lon: -50.2746538573937 },
+  { nome: "1328", lat: -22.4547657081069, lon: -50.4637566950536 },
+  { nome: "7433", lat: -22.4691460995485, lon: -50.5497371946748 },
+  { nome: "7455", lat: -22.3874440759525, lon: -50.4942835350973 },
+  { nome: "7479", lat: -22.4828017146545, lon: -50.5302257436861 },
+  { nome: "7495", lat: -22.3994672047888, lon: -50.5373429232087 },
+  { nome: "7516", lat: -22.3780366125577, lon: -50.5543679671105 },
+  { nome: "7555", lat: -22.3206217132723, lon: -50.5433704315622 },
+  { nome: "7556", lat: -22.3384397806611, lon: -50.4546345888301 },
+  { nome: "7557", lat: -22.3338920872249, lon: -50.4783155055333 },
+  { nome: "7602", lat: -22.4316320884145, lon: -50.5567385829072 },
+  { nome: "7603", lat: -22.4627953458153, lon: -50.4839855543224 },
+  { nome: "7604", lat: -22.5021229722566, lon: -50.4455373873261 },
+  { nome: "7606", lat: -22.4977850518866, lon: -50.4231586210946 },
+  { nome: "7607", lat: -22.4628461181167, lon: -50.5275930597049 },
+  { nome: "7608", lat: -22.4636380966417, lon: -50.4595044792208 },
+  { nome: "7611", lat: -22.3724266372736, lon: -50.4442401565338 },
+  { nome: "7612", lat: -22.4824430085569, lon: -50.5148616727889 },
+  { nome: "7613", lat: -22.5089980067368, lon: -50.4281755646205 },
+  { nome: "7615", lat: -22.4668961204266, lon: -50.508330977794 },
+  { nome: "7617", lat: -22.3307285856919, lon: -50.4566353760103 },
+  { nome: "7620", lat: -22.4520847858486, lon: -50.4518856829909 },
+  { nome: "7621", lat: -22.4491986556584, lon: -50.5005795769024 },
+  { nome: "7622", lat: -22.4587337338947, lon: -50.5373946964405 },
+  { nome: "7632", lat: -22.4590451880889, lon: -50.474853088151 },
+  { nome: "7633", lat: -22.4432346138387, lon: -50.4332165460013 },
+  { nome: "7637", lat: -22.3766059450315, lon: -50.4407837058439 },
+  { nome: "7638", lat: -22.495788194966, lon: -50.4072598355338 },
+  { nome: "7639", lat: -22.4897537326773, lon: -50.4463028742027 },
+  { nome: "7641", lat: -22.4909865010239, lon: -50.4417048565241 },
+  { nome: "7644", lat: -22.4761927883068, lon: -50.414770835281 },
+  { nome: "7645", lat: -22.4538533096712, lon: -50.4583990861412 },
+  { nome: "7646", lat: -22.4264806043879, lon: -50.4582602413903 },
+  { nome: "7647", lat: -22.4927635164001, lon: -50.3892477128686 },
+  { nome: "7663", lat: -22.42473306947, lon: -50.4240956623603 },
+  { nome: "7664", lat: -22.4275408495475, lon: -50.3957825605034 },
+  { nome: "7665", lat: -22.4759345996487, lon: -50.5278798738332 },
+  { nome: "7666", lat: -22.3915355907674, lon: -50.4726144664612 },
+  { nome: "7668", lat: -22.3992905225765, lon: -50.4652217460631 },
+  { nome: "7677", lat: -22.3839692834417, lon: -50.5102214364796 },
+  { nome: "7683", lat: -22.4709559053259, lon: -50.4151581493397 },
+  { nome: "7685", lat: -22.4802415924462, lon: -50.4035388221233 },
+  { nome: "7687", lat: -22.3387930310081, lon: -50.4375482874858 },
+  { nome: "7688", lat: -22.4814692996595, lon: -50.522051755181 },
+  { nome: "7694", lat: -22.320020421085, lon: -50.426947640388 },
+  { nome: "7696", lat: -22.4063030992992, lon: -50.5200555707895 },
+  { nome: "7698", lat: -22.4130769504408, lon: -50.4897807270232 },
+  { nome: "7699", lat: -22.3732561503823, lon: -50.3460612357201 },
+  { nome: "7701", lat: -22.4804778348193, lon: -50.5101877274845 },
+  { nome: "7702", lat: -22.3920449287443, lon: -50.4821091629155 },
+  { nome: "7704", lat: -22.4587094271237, lon: -50.3869611347837 },
+  { nome: "7705", lat: -22.3623573840941, lon: -50.3327503621386 },
+  { nome: "7706", lat: -22.4170714778935, lon: -50.4114302708253 },
+  { nome: "7708", lat: -22.3606940459995, lon: -50.415668226193 },
+  { nome: "7711", lat: -22.4796321313301, lon: -50.4882747825996 },
+  { nome: "7713", lat: -22.4205348695677, lon: -50.4486181364129 },
+  { nome: "7714", lat: -22.4790656814561, lon: -50.533629451452 },
+  { nome: "7715", lat: -22.4639141799469, lon: -50.4077178139059 },
+  { nome: "7718", lat: -22.3736124903806, lon: -50.4809685538024 },
+  { nome: "7719", lat: -22.3690231588788, lon: -50.4711103935657 },
+  { nome: "7720", lat: -22.4474817509038, lon: -50.5444120750891 },
+  { nome: "7723", lat: -22.4745621124868, lon: -50.5360134586583 },
+  { nome: "7724", lat: -22.4792024041893, lon: -50.5461601907683 },
+  { nome: "7725", lat: -22.4770865069748, lon: -50.5431356580451 },
+  { nome: "7726", lat: -22.4786807031133, lon: -50.5402512481521 },
+  { nome: "7727", lat: -22.3682558524558, lon: -50.4281550493942 },
+  { nome: "7728", lat: -22.4791904629591, lon: -50.504661380271 },
+  { nome: "7729", lat: -22.3268969561854, lon: -50.4284100354818 },
+  { nome: "7730", lat: -22.4796276751361, lon: -50.4453896198754 },
+  { nome: "7731", lat: -22.4167011394378, lon: -50.5204882120175 },
+  { nome: "7732", lat: -22.2854287256229, lon: -50.3085579027036 },
+  { nome: "7735", lat: -22.4624182647564, lon: -50.4182446380807 },
+  { nome: "7736", lat: -22.3823037332263, lon: -50.331435026078 },
+  { nome: "7740", lat: -22.413492649584, lon: -50.4621187155348 },
+  { nome: "7741", lat: -22.3402863415285, lon: -50.3686663038568 },
+  { nome: "7744", lat: -22.3655528523211, lon: -50.4380746206239 },
+  { nome: "7745", lat: -22.3634469135982, lon: -50.462614860542 },
+  { nome: "7747", lat: -22.4493734287436, lon: -50.4030888594721 },
+  { nome: "7748", lat: -22.3964606560977, lon: -50.4054480835472 },
+  { nome: "7750", lat: -22.4691676700652, lon: -50.4057101729906 },
+  { nome: "7751", lat: -22.5239409808175, lon: -50.4573418709318 },
+  { nome: "7752", lat: -22.5001241282317, lon: -50.456134247623 },
+  { nome: "7755", lat: -22.3168994567222, lon: -50.5434421658789 },
+  { nome: "7756", lat: -22.4405673337228, lon: -50.5134229111659 },
+  { nome: "7758", lat: -22.4463114151137, lon: -50.4677086634765 },
+  { nome: "7760", lat: -22.3722261722005, lon: -50.4057410346625 },
+  { nome: "7761", lat: -22.3691090916509, lon: -50.4054915865536 },
+  { nome: "7765", lat: -22.4707330015787, lon: -50.4376589270827 },
+  { nome: "7767", lat: -22.4073974814729, lon: -50.2417436964032 },
+  { nome: "7768", lat: -22.24090610953, lon: -50.2936850147528 },
+  { nome: "7770", lat: -22.3762195217849, lon: -50.4008830924694 },
+  { nome: "7771", lat: -22.4853372903212, lon: -50.4031085324911 },
+  { nome: "7778", lat: -22.4200602411126, lon: -50.5120292055388 },
+  { nome: "7800", lat: -22.3842587889756, lon: -50.4786087872222 },
+  { nome: "7801", lat: -22.3840499726916, lon: -50.470329595702 },
+  { nome: "7803", lat: -22.3969681500238, lon: -50.304381644178 },
+  { nome: "7806", lat: -22.399099241943, lon: -50.4804790910515 },
+  { nome: "7807", lat: -22.4896900314325, lon: -50.5320339211167 },
+  { nome: "7808", lat: -22.4388944366989, lon: -50.2737111696664 },
+  { nome: "7809", lat: -22.4068259544873, lon: -50.3415309230809 },
+  { nome: "7810", lat: -22.4218788713287, lon: -50.5053083677509 },
+  { nome: "7812", lat: -22.4695968043306, lon: -50.4511590699272 },
+  { nome: "7816", lat: -22.4593713034754, lon: -50.4862061854514 },
+  { nome: "7817", lat: -22.5230514232654, lon: -50.4420642583617 },
+  { nome: "7818", lat: -22.4477272593718, lon: -50.4760675525546 },
+  { nome: "7820", lat: -22.4375331204982, lon: -50.4787972026251 },
+  { nome: "7821", lat: -22.3492044234671, lon: -50.3779331230008 },
+  { nome: "7822", lat: -22.4250783257938, lon: -50.531470236643 },
+  { nome: "7824", lat: -22.4740956751198, lon: -50.5034391972494 },
+  { nome: "7825", lat: -22.4331310394273, lon: -50.338145110512 },
+  { nome: "7826", lat: -22.4479645523206, lon: -50.3528227332594 },
+  { nome: "7827", lat: -22.2592011416802, lon: -50.3011803813275 },
+  { nome: "7828", lat: -22.4330209021647, lon: -50.4645671775336 },
+  { nome: "7829", lat: -22.4750793398555, lon: -50.4602043622192 },
+  { nome: "7830", lat: -22.5048266675703, lon: -50.4785238105172 },
+  { nome: "7831", lat: -22.4763833889392, lon: -50.486629012576 },
+  { nome: "7832", lat: -22.4856689699814, lon: -50.4665151871174 },
+  { nome: "7833", lat: -22.4679039235347, lon: -50.4683852590536 },
+  { nome: "7834", lat: -22.4058199670454, lon: -50.2513041206632 },
+  { nome: "7835", lat: -22.5231371761082, lon: -50.436290773516 },
+  { nome: "7836", lat: -22.2633537382599, lon: -50.3008913651518 },
+  { nome: "7837", lat: -22.4235484978778, lon: -50.5364651060336 },
+  { nome: "7839", lat: -22.4963194326373, lon: -50.5268330194248 },
+  { nome: "7840", lat: -22.4048170521019, lon: -50.4754824161235 },
+  { nome: "7841", lat: -22.411584870562, lon: -50.4793278339552 },
+  { nome: "7842", lat: -22.4040522522825, lon: -50.4434787689284 },
+  { nome: "7843", lat: -22.4090932978637, lon: -50.4728562403179 },
+  { nome: "7845", lat: -22.518251459635, lon: -50.4541632802956 },
+  { nome: "7847", lat: -22.2533951026533, lon: -50.386026189951 },
+  { nome: "7848", lat: -22.4140714874085, lon: -50.4305093659553 },
+  { nome: "7849", lat: -22.4362248944157, lon: -50.5270933075254 },
+  { nome: "7851", lat: -22.4515033532733, lon: -50.4681043929088 },
+  { nome: "7852", lat: -22.4420885872544, lon: -50.4802860014505 },
+  { nome: "7855", lat: -22.4189275782113, lon: -50.4753255785601 },
+  { nome: "7856", lat: -22.5314114456282, lon: -50.4438497105801 },
+  { nome: "7857", lat: -22.5643700002452, lon: -50.3701706393984 },
+  { nome: "7858", lat: -22.4619562496361, lon: -50.4618107947168 },
+  { nome: "7859", lat: -22.4177014280492, lon: -50.4416720701543 },
+  { nome: "7860", lat: -22.5175474550888, lon: -50.4465385150512 },
+  { nome: "7861", lat: -22.4677802376446, lon: -50.4453167567878 },
+  { nome: "7862", lat: -22.5558561654178, lon: -50.2523533649768 },
+  { nome: "7863", lat: -22.4069191252569, lon: -50.3240091382546 },
+  { nome: "7864", lat: -22.4023160651368, lon: -50.3327645625193 },
+  { nome: "7865", lat: -22.423686123281, lon: -50.3242795531101 },
+  { nome: "7866", lat: -22.4259212481477, lon: -50.3162396672618 },
+  { nome: "7867", lat: -22.4160565043535, lon: -50.3155158973633 },
+  { nome: "7868", lat: -22.5097707838506, lon: -50.4729521940478 },
+  { nome: "7869", lat: -22.5049966045341, lon: -50.4843793009418 },
+  { nome: "7870", lat: -22.4304807854684, lon: -50.5420524676043 },
+  { nome: "7873", lat: -22.4511996737983, lon: -50.2647000536496 },
+  { nome: "7874", lat: -22.4661159004599, lon: -50.4158761237347 },
+  { nome: "7878", lat: -22.3641136644078, lon: -50.4224885513198 },
+  { nome: "7879", lat: -22.5079150566209, lon: -50.1719103681221 },
+  { nome: "7880", lat: -22.332893778491, lon: -50.4442344486815 },
+  { nome: "7881", lat: -22.3506183535754, lon: -50.4538466014002 },
+  { nome: "7882", lat: -22.4383139249347, lon: -50.5110710497912 },
+  { nome: "7884", lat: -22.5248854080802, lon: -50.1732786770318 },
+  { nome: "7885", lat: -22.5351821678274, lon: -50.1783730366116 },
+  { nome: "7886", lat: -22.4461988386089, lon: -50.4792796505265 },
+  { nome: "7887", lat: -22.5018440310663, lon: -50.3174130631562 },
+  { nome: "7888", lat: -22.2744451890355, lon: -50.3028519015213 },
+  { nome: "7889", lat: -22.3498340068787, lon: -50.5055174984881 },
+  { nome: "7890", lat: -22.2372786106281, lon: -50.288516784018 },
+  { nome: "7891", lat: -22.2317221352797, lon: -50.2785892597397 },
+  { nome: "7892", lat: -22.225721749146, lon: -50.2936193712448 },
+  { nome: "7893", lat: -22.2587246066453, lon: -50.208864939275 },
+  { nome: "7894", lat: -22.406813414095, lon: -50.4112179457579 },
+  { nome: "7895", lat: -22.2219373935604, lon: -50.3148093365447 },
+  { nome: "7896", lat: -22.2342731694478, lon: -50.3259597667915 },
+  { nome: "7897", lat: -22.4935366102196, lon: -50.4790142889927 },
+  { nome: "7898", lat: -22.4325329482963, lon: -50.4870878315706 },
+  { nome: "7899", lat: -22.4331378717183, lon: -50.4832694447158 },
+  { nome: "7900", lat: -22.2201101608695, lon: -50.3284585867343 },
+  { nome: "7903", lat: -22.5055427865547, lon: -50.4626369117426 },
+  { nome: "7904", lat: -22.2922938811596, lon: -50.2076833880197 },
+  { nome: "7905", lat: -22.4420074152589, lon: -50.4031194260021 },
+  { nome: "7906", lat: -22.2815343663873, lon: -50.3123986777879 },
+  { nome: "7907", lat: -22.3831652442211, lon: -50.4218239023892 },
+  { nome: "7908", lat: -22.4737220672456, lon: -50.5460864548202 },
+  { nome: "7909", lat: -22.4248932937298, lon: -50.4767850551232 },
+  { nome: "7910", lat: -22.5025200409598, lon: -50.2806608540211 },
+  { nome: "7911", lat: -22.4307526027688, lon: -50.4749688578194 },
+  { nome: "7912", lat: -22.3802652375401, lon: -50.3674051712013 },
+  { nome: "7913", lat: -22.3991222825711, lon: -50.3631566943284 },
+  { nome: "7914", lat: -22.3640090937304, lon: -50.4359779321084 },
+  { nome: "7915", lat: -22.5785642861636, lon: -50.4624876884975 },
+  { nome: "7916", lat: -22.361846757987, lon: -50.4341805145971 },
+  { nome: "7917", lat: -22.5714625154938, lon: -50.4503763285679 },
+  { nome: "7918", lat: -22.4026702145561, lon: -50.366382156637 },
+  { nome: "7919", lat: -22.439971949902, lon: -50.4966592791632 },
+  { nome: "7920", lat: -22.3776001644226, lon: -50.56383254834 },
+  { nome: "7922", lat: -22.5582881629203, lon: -50.488490367302 }
+];
+
+// Funções auxiliares
+function calcularDistancia(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function formatarDistancia(metros) {
+  if (metros < 1000) return `${Math.round(metros)} m`;
+  return `${(metros / 1000).toFixed(1)} km`;
+}
+
+function FitBounds({ routeCoords }) {
+  const map = useMap();
+  useEffect(() => {
+    if (routeCoords && routeCoords.length > 0) {
+      const bounds = L.latLngBounds(routeCoords);
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }, [routeCoords, map]);
+  return null;
+}
+
+export default function App() {
+  const [currentPosition, setCurrentPosition] = useState(null);
+  const [selectedZone, setSelectedZone] = useState(null);
+  const [route, setRoute] = useState([]);
+  const [distance, setDistance] = useState(null);
+  const [duration, setDuration] = useState(null);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [loadingRoute, setLoadingRoute] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showList, setShowList] = useState(false);
+  const mapRef = useRef();
+
+  // Buscar localização
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCurrentPosition({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+      },
+      (err) => console.error("Erro GPS:", err),
+      { enableHighAccuracy: true }
+    );
+  }, []);
+
+  // Buscar rota real (usando OSRM)
+  async function buscarRota(start, end) {
+    setLoadingRoute(true);
+    try {
+      const url = `https://router.project-osrm.org/route/v1/drive/${start.lng},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson&steps=true`;
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.routes && data.routes.length > 0) {
+        const coordinates = data.routes[0].geometry.coordinates.map(coord => ({
+          lat: coord[1],
+          lng: coord[0],
+        }));
+        setRoute(coordinates);
+        setDistance(Math.round(data.routes[0].distance));
+        setDuration(Math.round(data.routes[0].duration / 60));
+        setIsNavigating(true);
+      } else {
+        alert("Não foi possível calcular rota");
+      }
+    } catch (error) {
+      console.error("Erro:", error);
+      alert("Erro ao calcular rota. Verifique internet.");
+    } finally {
+      setLoadingRoute(false);
+    }
+  }
+
+  function iniciarNavegacao(zona) {
+    setSelectedZone(zona);
+    setShowList(false);
+    if (currentPosition) {
+      buscarRota(currentPosition, {
+        lat: zona.lat,
+        lng: zona.lon,
+      });
+    } else {
+      alert("Aguardando localização...");
+    }
+  }
+
+  function pararNavegacao() {
+    setIsNavigating(false);
+    setRoute([]);
+    setSelectedZone(null);
+    setDistance(null);
+    setDuration(null);
+  }
+
+  // Filtrar zonas por busca
+  const zonasFiltradas = waypoints.filter(zona =>
+    zona.nome.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Zonas próximas (até 2km)
+  const zonasProximas = currentPosition ? waypoints
+    .map(zona => ({
+      ...zona,
+      distancia: calcularDistancia(currentPosition.lat, currentPosition.lng, zona.lat, zona.lon)
+    }))
+    .filter(zona => zona.distancia < 2000)
+    .sort((a, b) => a.distancia - b.distancia)
+    .slice(0, 10) : [];
+
+  return (
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+      {/* Barra de controle */}
+      <div style={{ padding: "10px", background: "#1a472a", color: "white", zIndex: 1000 }}>
+        <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
+          <input
+            type="text"
+            placeholder="Buscar zona (ex: 7922)..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onFocus={() => setShowList(true)}
+            style={{ flex: 2, padding: "10px", borderRadius: "5px", border: "none", fontSize: "16px" }}
+          />
+          <button
+            onClick={() => setShowList(!showList)}
+            style={{ padding: "10px 15px", background: "#3498db", color: "white", border: "none", borderRadius: "5px", cursor: "pointer" }}
+          >
+            📋 Lista
+          </button>
+          {isNavigating && (
+            <button
+              onClick={pararNavegacao}
+              style={{ padding: "10px 15px", background: "#e74c3c", color: "white", border: "none", borderRadius: "5px", cursor: "pointer" }}
+            >
+              ⏹️ Parar
+            </button>
+          )}
+        </div>
+
+        {/* Painel de navegação ativa */}
+        {isNavigating && selectedZone && (
+          <div style={{ background: "#2c5f2d", padding: "10px", borderRadius: "5px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+              <strong>🎯 Zona {selectedZone.nome}</strong>
+              <span>📏 {distance ? formatarDistancia(distance) : "---"}</span>
+              <span>⏱️ {duration ? `${duration} min` : "---"}</span>
+              {loadingRoute && <span>⏳ Calculando rota...</span>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Mapa */}
+      <div style={{ flex: 1, position: "relative" }}>
+        <MapContainer
+          center={[-22.45, -50.38]}
+          zoom={13}
+          style={{ height: "100%", width: "100%" }}
+          whenReady={(map) => (mapRef.current = map.target)}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; OpenStreetMap'
+          />
+          
+          {/* Posição atual */}
+          {currentPosition && (
+            <Marker position={[currentPosition.lat, currentPosition.lng]}>
+              <Popup>📍 Você está aqui</Popup>
+            </Marker>
+          )}
+          
+          {/* Todas as zonas */}
+          {zonasFiltradas.map((zona) => (
+            <Marker
+              key={zona.nome}
+              position={[zona.lat, zona.lon]}
+              eventHandlers={{ click: () => iniciarNavegacao(zona) }}
+            >
+              <Popup>
+                <div style={{ textAlign: "center" }}>
+                  <strong>🌾 Zona {zona.nome}</strong>
+                  <button 
+                    onClick={() => iniciarNavegacao(zona)} 
+                    style={{ marginTop: "8px", background: "#27ae60", color: "white", border: "none", padding: "5px 10px", borderRadius: "3px", cursor: "pointer", width: "100%" }}
+                  >
+                    🚜 Navegar
+                  </button>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+          
+          {/* Rota desenhada no mapa */}
+          {route.length > 0 && (
+            <Polyline
+              positions={route.map(p => [p.lat, p.lng])}
+              color="#3498db"
+              weight={5}
+              opacity={0.9}
+            />
+          )}
+          
+          <FitBounds routeCoords={route.map(p => [p.lat, p.lng])} />
+        </MapContainer>
+
+        {/* LISTA LATERAL DE ZONAS */}
+        {showList && (
+          <div style={{
+            position: "absolute",
+            top: 10,
+            right: 10,
+            bottom: 10,
+            width: "300px",
+            background: "rgba(0,0,0,0.95)",
+            borderRadius: "10px",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            zIndex: 10000,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.5)"
+          }}>
+            <div style={{ padding: "12px", background: "#1a472a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <strong style={{ color: "white" }}>📋 Todas as Zonas ({zonasFiltradas.length})</strong>
+              <button onClick={() => setShowList(false)} style={{ background: "#e74c3c", color: "white", border: "none", borderRadius: "5px", padding: "5px 10px", cursor: "pointer" }}>✕ Fechar</button>
+            </div>
+            
+            <div style={{ padding: "10px" }}>
+              <input
+                type="text"
+                placeholder="Filtrar zona..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ width: "100%", padding: "8px", borderRadius: "5px", border: "1px solid #555", marginBottom: "10px", fontSize: "14px" }}
+              />
+            </div>
+            
+            <ScrollView style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
+              {zonasFiltradas.map((zona) => {
+                const distancia = currentPosition ? calcularDistancia(currentPosition.lat, currentPosition.lng, zona.lat, zona.lon) : null;
+                return (
+                  <div
+                    key={zona.nome}
+                    onClick={() => iniciarNavegacao(zona)}
+                    style={{
+                      padding: "10px",
+                      marginBottom: "8px",
+                      background: selectedZone?.nome === zona.nome ? "#27ae60" : "#2c3e50",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      transition: "all 0.2s"
+                    }}
+                  >
+                    <div>
+                      <strong style={{ color: "white", fontSize: "16px" }}>Zona {zona.nome}</strong>
+                      {distancia && distancia < 2000 && (
+                        <div style={{ color: "#2ecc71", fontSize: "11px" }}>📍 {formatarDistancia(distancia)}</div>
+                      )}
+                    </div>
+                    <div style={{ color: "#3498db", fontSize: "18px" }}>🚜</div>
+                  </div>
+                );
+              })}
+              {zonasFiltradas.length === 0 && (
+                <div style={{ textAlign: "center", color: "#aaa", padding: "20px" }}>
+                  Nenhuma zona encontrada
+                </div>
+              )}
+            </ScrollView>
+            
+            {/* Zonas próximas em destaque */}
+            {zonasProximas.length > 0 && !searchTerm && (
+              <div style={{ padding: "10px", borderTop: "1px solid #444", background: "#1a1a2e" }}>
+                <div style={{ color: "#f39c12", fontSize: "12px", marginBottom: "8px" }}>🌟 ZONAS PRÓXIMAS (até 2km)</div>
+                {zonasProximas.map((zona) => (
+                  <div
+                    key={`prox-${zona.nome}`}
+                    onClick={() => iniciarNavegacao(zona)}
+                    style={{
+                      padding: "8px",
+                      marginBottom: "5px",
+                      background: "#e67e22",
+                      borderRadius: "5px",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between"
+                    }}
+                  >
+                    <span style={{ fontWeight: "bold" }}>Zona {zona.nome}</span>
+                    <span>{formatarDistancia(zona.distancia)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Botão flutuante para abrir lista */}
+      {!showList && (
+        <button
+          onClick={() => setShowList(true)}
+          style={{
+            position: "absolute",
+            bottom: 20,
+            right: 20,
+            background: "#1a472a",
+            color: "white",
+            border: "none",
+            borderRadius: "50px",
+            padding: "12px 20px",
+            fontSize: "16px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            zIndex: 1000,
+            boxShadow: "0 2px 10px rgba(0,0,0,0.3)"
+          }}
+        >
+          📋 Lista de Zonas
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Componente ScrollView simples
+function ScrollView({ children, style }) {
+  return <div style={{ ...style, overflowY: "auto" }}>{children}</div>;
+}
