@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: API specification para renan.foda — IA de sinais IQ Option
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: iqoption
+    description: IQ Option trading signals
 paths:
   /healthz:
     get:
@@ -24,6 +26,173 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /iqoption/connect:
+    post:
+      operationId: connectIqOption
+      tags: [iqoption]
+      summary: Conectar à IQ Option
+      description: Autentica e conecta à IQ Option usando as credenciais configuradas
+      responses:
+        "200":
+          description: Conexão estabelecida
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionStatus"
+        "401":
+          description: Credenciais inválidas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /iqoption/status:
+    get:
+      operationId: getConnectionStatus
+      tags: [iqoption]
+      summary: Status da conexão
+      description: Retorna o status atual da conexão com a IQ Option e saldo da conta
+      responses:
+        "200":
+          description: Status da conexão
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionStatus"
+
+  /iqoption/pairs:
+    get:
+      operationId: getTradingPairs
+      tags: [iqoption]
+      summary: Listar pares disponíveis
+      description: Retorna todos os pares OTC e mercado aberto disponíveis
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [all, otc, open]
+          description: Filtro por tipo de mercado
+      responses:
+        "200":
+          description: Lista de pares
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingPairsResponse"
+
+  /iqoption/signals:
+    get:
+      operationId: getAllSignals
+      tags: [iqoption]
+      summary: Buscar todos os sinais
+      description: Retorna sinais CALL/PUT para todos os pares ativos com múltiplas estratégias
+      parameters:
+        - in: query
+          name: timeframe
+          schema:
+            type: integer
+            default: 60
+          description: Timeframe em segundos (60, 120, 300)
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [all, otc, open]
+            default: all
+      responses:
+        "200":
+          description: Sinais de trading
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignalsResponse"
+
+  /iqoption/signals/{pair}:
+    get:
+      operationId: getPairSignal
+      tags: [iqoption]
+      summary: Sinal de um par específico
+      description: Retorna análise detalhada e sinal para um par específico
+      parameters:
+        - in: path
+          name: pair
+          required: true
+          schema:
+            type: string
+          description: Nome do par (ex. EURUSD-OTC)
+        - in: query
+          name: timeframe
+          schema:
+            type: integer
+            default: 60
+      responses:
+        "200":
+          description: Sinal detalhado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailedSignal"
+
+  /iqoption/candles/{pair}:
+    get:
+      operationId: getCandles
+      tags: [iqoption]
+      summary: Dados de velas
+      description: Retorna dados históricos de velas para análise
+      parameters:
+        - in: path
+          name: pair
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: timeframe
+          schema:
+            type: integer
+            default: 60
+        - in: query
+          name: count
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Dados de velas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CandlesResponse"
+
+  /iqoption/account:
+    get:
+      operationId: getAccountInfo
+      tags: [iqoption]
+      summary: Informações da conta
+      description: Retorna saldo e informações da conta real
+      responses:
+        "200":
+          description: Informações da conta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountInfo"
+
+  /iqoption/stats:
+    get:
+      operationId: getSignalStats
+      tags: [iqoption]
+      summary: Estatísticas dos sinais
+      description: Resumo de sinais CALL/PUT, pares mais fortes, e distribuição por estratégia
+      responses:
+        "200":
+          description: Estatísticas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignalStats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +203,287 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message
+
+    ConnectionStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        accountType:
+          type: string
+        balance:
+          type: number
+        currency:
+          type: string
+        email:
+          type: string
+        message:
+          type: string
+      required:
+        - connected
+        - message
+
+    TradingPair:
+      type: object
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        type:
+          type: string
+          enum: [otc, open]
+        profitPercent:
+          type: number
+        isOpen:
+          type: boolean
+      required:
+        - name
+        - displayName
+        - type
+        - isOpen
+
+    TradingPairsResponse:
+      type: object
+      properties:
+        pairs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradingPair"
+        total:
+          type: integer
+        otcCount:
+          type: integer
+        openCount:
+          type: integer
+      required:
+        - pairs
+        - total
+        - otcCount
+        - openCount
+
+    StrategySignal:
+      type: object
+      properties:
+        name:
+          type: string
+        signal:
+          type: string
+          enum: [CALL, PUT, NEUTRO]
+        strength:
+          type: number
+        description:
+          type: string
+      required:
+        - name
+        - signal
+        - strength
+        - description
+
+    Signal:
+      type: object
+      properties:
+        pair:
+          type: string
+        displayName:
+          type: string
+        type:
+          type: string
+          enum: [otc, open]
+        signal:
+          type: string
+          enum: [CALL, PUT, NEUTRO]
+        confidence:
+          type: number
+        profitPercent:
+          type: number
+        timeframe:
+          type: integer
+        entryType:
+          type: string
+          enum: [proxima_vela, mesma_vela]
+        strategies:
+          type: array
+          items:
+            $ref: "#/components/schemas/StrategySignal"
+        timestamp:
+          type: string
+      required:
+        - pair
+        - displayName
+        - type
+        - signal
+        - confidence
+        - timeframe
+        - entryType
+        - strategies
+        - timestamp
+
+    SignalsResponse:
+      type: object
+      properties:
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Signal"
+        total:
+          type: integer
+        callCount:
+          type: integer
+        putCount:
+          type: integer
+        neutroCount:
+          type: integer
+        generatedAt:
+          type: string
+      required:
+        - signals
+        - total
+        - callCount
+        - putCount
+        - neutroCount
+        - generatedAt
+
+    Candle:
+      type: object
+      properties:
+        time:
+          type: integer
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        volume:
+          type: number
+      required:
+        - time
+        - open
+        - high
+        - low
+        - close
+
+    CandlesResponse:
+      type: object
+      properties:
+        pair:
+          type: string
+        timeframe:
+          type: integer
+        candles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Candle"
+      required:
+        - pair
+        - timeframe
+        - candles
+
+    DetailedSignal:
+      type: object
+      properties:
+        signal:
+          $ref: "#/components/schemas/Signal"
+        indicators:
+          type: object
+          properties:
+            rsi:
+              type: number
+            macd:
+              type: number
+            macdSignal:
+              type: number
+            bollingerUpper:
+              type: number
+            bollingerMiddle:
+              type: number
+            bollingerLower:
+              type: number
+            ema9:
+              type: number
+            ema21:
+              type: number
+            stochK:
+              type: number
+            stochD:
+              type: number
+            currentPrice:
+              type: number
+          required:
+            - currentPrice
+      required:
+        - signal
+        - indicators
+
+    AccountInfo:
+      type: object
+      properties:
+        balance:
+          type: number
+        currency:
+          type: string
+        accountType:
+          type: string
+        email:
+          type: string
+        connected:
+          type: boolean
+      required:
+        - balance
+        - currency
+        - accountType
+        - connected
+
+    SignalStats:
+      type: object
+      properties:
+        totalSignals:
+          type: integer
+        callCount:
+          type: integer
+        putCount:
+          type: integer
+        neutroCount:
+          type: integer
+        strongSignals:
+          type: integer
+        topPairs:
+          type: array
+          items:
+            type: object
+            properties:
+              pair:
+                type: string
+              signal:
+                type: string
+              confidence:
+                type: number
+            required:
+              - pair
+              - signal
+              - confidence
+        strategyBreakdown:
+          type: object
+          additionalProperties:
+            type: integer
+      required:
+        - totalSignals
+        - callCount
+        - putCount
+        - neutroCount
+        - strongSignals
+        - topPairs
+        - strategyBreakdown
