@@ -7,15 +7,7 @@ import {
   getGetPairSignalQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   RefreshCw,
   TrendingUp,
@@ -25,6 +17,7 @@ import {
   Wifi,
   WifiOff,
   Minus,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +35,11 @@ const OPEN_PAIRS = [
   "EURUSD", "EURGBP", "EURJPY", "GBPUSD", "GBPJPY",
   "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "AUDJPY",
   "NZDUSD", "CHFJPY", "XAUUSD", "XAGUSD",
+];
+
+const ALL_PAIRS = [
+  ...OTC_PAIRS.map((p) => ({ value: p, label: p.replace("-OTC", " OTC"), group: "OTC" })),
+  ...OPEN_PAIRS.map((p) => ({ value: p, label: p, group: "ABERTO" })),
 ];
 
 interface HistoryItem {
@@ -68,9 +66,76 @@ function saveHistory(items: HistoryItem[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, 50)));
 }
 
+function PairSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = ALL_PAIRS.find((p) => p.value === value);
+
+  return (
+    <div className="relative flex-1">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 bg-[#070b12] border border-[#1a2332] rounded-lg px-3 h-10 text-white font-mono font-bold text-sm hover:border-[#2a3342] transition-colors"
+      >
+        <span>{current?.label ?? value}</span>
+        <ChevronDown className={cn("w-4 h-4 text-gray-500 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute left-0 top-11 z-50 w-56 bg-[#0d1420] border border-[#1a2332] rounded-xl shadow-2xl overflow-hidden">
+            <div className="max-h-72 overflow-y-auto">
+              <div className="px-3 py-2 text-[10px] text-gray-500 uppercase tracking-widest font-semibold bg-[#070b12]">
+                — OTC —
+              </div>
+              {OTC_PAIRS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => { onChange(p); setOpen(false); }}
+                  className={cn(
+                    "w-full text-left px-3 py-2.5 text-sm font-mono text-white hover:bg-[#1a2332] transition-colors",
+                    value === p && "bg-[#1a2332] text-blue-400"
+                  )}
+                >
+                  {p.replace("-OTC", " OTC")}
+                </button>
+              ))}
+              <div className="px-3 py-2 text-[10px] text-gray-500 uppercase tracking-widest font-semibold bg-[#070b12] mt-1">
+                — ABERTO —
+              </div>
+              {OPEN_PAIRS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => { onChange(p); setOpen(false); }}
+                  className={cn(
+                    "w-full text-left px-3 py-2.5 text-sm font-mono text-white hover:bg-[#1a2332] transition-colors",
+                    value === p && "bg-[#1a2332] text-blue-400"
+                  )}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [selectedPair, setSelectedPair] = useState("EURUSD-OTC");
   const [timeframe, setTimeframe] = useState(60);
+  const [tfOpen, setTfOpen] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>(loadHistory);
   const [signalCount, setSignalCount] = useState(0);
   const [lastSignalId, setLastSignalId] = useState<string | null>(null);
@@ -92,11 +157,26 @@ export default function Dashboard() {
         enabled: !!selectedPair,
         queryKey: getGetPairSignalQueryKey(selectedPair, { timeframe }),
         refetchInterval: 30000,
+        staleTime: 0,
       },
     }
   );
 
   const connect = useConnectIqOption();
+
+  const handlePairChange = useCallback((pair: string) => {
+    setSelectedPair(pair);
+    queryClient.removeQueries({
+      queryKey: getGetPairSignalQueryKey(pair, { timeframe }),
+    });
+  }, [queryClient, timeframe]);
+
+  const handleTimeframeChange = useCallback((tf: number) => {
+    setTimeframe(tf);
+    queryClient.removeQueries({
+      queryKey: getGetPairSignalQueryKey(selectedPair, { timeframe: tf }),
+    });
+  }, [queryClient, selectedPair]);
 
   useEffect(() => {
     if (signalData?.signal && signalData.signal.signal !== "NEUTRO") {
@@ -150,6 +230,8 @@ export default function Dashboard() {
     history.length === 0
       ? null
       : Math.round((history.filter((h) => h.confidence >= 60).length / history.length) * 100);
+
+  const tfLabels: Record<number, string> = { 60: "M1", 300: "M5", 900: "M15" };
 
   return (
     <div className="min-h-screen bg-[#070b12] text-white flex flex-col items-center py-6 px-4">
@@ -206,58 +288,37 @@ export default function Dashboard() {
 
         {/* Pair + Timeframe Selectors */}
         <div className="p-3 border-b border-[#1a2332] flex gap-2">
-          <Select value={selectedPair} onValueChange={setSelectedPair}>
-            <SelectTrigger className="flex-1 bg-[#070b12] border-[#1a2332] text-white font-mono font-bold text-sm h-10">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-[#0d1420] border-[#1a2332] max-h-[280px]">
-              <div className="px-2 py-1.5 text-[10px] text-gray-500 uppercase tracking-widest font-semibold">
-                — OTC —
-              </div>
-              {OTC_PAIRS.map((p) => (
-                <SelectItem
-                  key={p}
-                  value={p}
-                  className="text-white data-[highlighted]:bg-[#1a2332] font-mono text-sm"
-                >
-                  {p.replace("-OTC", " OTC")}
-                </SelectItem>
-              ))}
-              <div className="px-2 py-1.5 text-[10px] text-gray-500 uppercase tracking-widest font-semibold mt-1">
-                — ABERTO —
-              </div>
-              {OPEN_PAIRS.map((p) => (
-                <SelectItem
-                  key={p}
-                  value={p}
-                  className="text-white data-[highlighted]:bg-[#1a2332] font-mono text-sm"
-                >
-                  {p}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PairSelector value={selectedPair} onChange={handlePairChange} />
 
-          <Select value={timeframe.toString()} onValueChange={(v) => setTimeframe(Number(v))}>
-            <SelectTrigger className="w-[72px] bg-[#070b12] border-[#1a2332] text-white font-mono font-bold text-sm h-10">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-[#0d1420] border-[#1a2332]">
-              {[
-                { value: "60", label: "M1" },
-                { value: "300", label: "M5" },
-                { value: "900", label: "M15" },
-              ].map(({ value, label }) => (
-                <SelectItem
-                  key={value}
-                  value={value}
-                  className="text-white data-[highlighted]:bg-[#1a2332] font-mono"
-                >
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Timeframe Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setTfOpen((o) => !o)}
+              className="flex items-center justify-between gap-1 bg-[#070b12] border border-[#1a2332] rounded-lg px-3 h-10 text-white font-mono font-bold text-sm w-[72px] hover:border-[#2a3342] transition-colors"
+            >
+              <span>{tfLabels[timeframe]}</span>
+              <ChevronDown className={cn("w-3.5 h-3.5 text-gray-500 transition-transform", tfOpen && "rotate-180")} />
+            </button>
+            {tfOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setTfOpen(false)} />
+                <div className="absolute right-0 top-11 z-50 w-20 bg-[#0d1420] border border-[#1a2332] rounded-xl shadow-2xl overflow-hidden">
+                  {[{ value: 60, label: "M1" }, { value: 300, label: "M5" }, { value: 900, label: "M15" }].map(({ value, label }) => (
+                    <button
+                      key={value}
+                      onClick={() => { handleTimeframeChange(value); setTfOpen(false); }}
+                      className={cn(
+                        "w-full text-left px-3 py-2.5 text-sm font-mono text-white hover:bg-[#1a2332] transition-colors",
+                        timeframe === value && "bg-[#1a2332] text-blue-400"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Price Display */}
@@ -290,12 +351,9 @@ export default function Dashboard() {
             <div
               className={cn(
                 "h-[88px] rounded-xl flex items-center justify-center gap-4 select-none",
-                isCall &&
-                  "bg-green-500/10 border-2 border-green-500/60 shadow-[0_0_24px_rgba(34,197,94,0.15)]",
-                isPut &&
-                  "bg-red-500/10 border-2 border-red-500/60 shadow-[0_0_24px_rgba(239,68,68,0.15)]",
-                isNeutral &&
-                  "bg-[#111827] border border-[#1a2332]"
+                isCall && "bg-green-500/10 border-2 border-green-500/60 shadow-[0_0_24px_rgba(34,197,94,0.15)]",
+                isPut && "bg-red-500/10 border-2 border-red-500/60 shadow-[0_0_24px_rgba(239,68,68,0.15)]",
+                isNeutral && "bg-[#111827] border border-[#1a2332]"
               )}
             >
               {isCall && <TrendingUp className="w-9 h-9 text-green-400" />}
@@ -316,23 +374,14 @@ export default function Dashboard() {
 
           {signal && !isNeutral && (
             <div className="mt-2.5 flex items-center justify-center gap-3">
-              <span
-                className={cn(
-                  "font-mono font-bold text-base",
-                  isCall ? "text-green-400" : "text-red-400"
-                )}
-              >
+              <span className={cn("font-mono font-bold text-base", isCall ? "text-green-400" : "text-red-400")}>
                 {signal.confidence}% confiança
               </span>
               <span className="text-xs text-gray-500 flex items-center gap-1">
                 {signal.entryType === "mesma_vela" ? (
-                  <>
-                    <Zap className="w-3 h-3 text-yellow-500" /> Mesma Vela
-                  </>
+                  <><Zap className="w-3 h-3 text-yellow-500" /> Mesma Vela</>
                 ) : (
-                  <>
-                    <Clock className="w-3 h-3" /> Próxima Vela
-                  </>
+                  <><Clock className="w-3 h-3" /> Próxima Vela</>
                 )}
               </span>
             </div>
@@ -346,16 +395,9 @@ export default function Dashboard() {
             { label: "HISTÓRICO", value: history.length },
             { label: "RENDIMENTO", value: winRate !== null ? `${winRate}%` : "—" },
           ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="py-4 text-center border-r border-[#1a2332] last:border-r-0"
-            >
-              <div className="text-2xl font-black font-mono text-white tabular-nums">
-                {value}
-              </div>
-              <div className="text-[9px] uppercase tracking-widest text-gray-600 mt-1 font-semibold">
-                {label}
-              </div>
+            <div key={label} className="py-4 text-center border-r border-[#1a2332] last:border-r-0">
+              <div className="text-2xl font-black font-mono text-white tabular-nums">{value}</div>
+              <div className="text-[9px] uppercase tracking-widest text-gray-600 mt-1 font-semibold">{label}</div>
             </div>
           ))}
         </div>
@@ -364,33 +406,62 @@ export default function Dashboard() {
       {/* Strategies Breakdown */}
       {signal?.strategies && signal.strategies.length > 0 && (
         <div className="w-full max-w-sm mt-3 bg-[#0d1420] border border-[#1a2332] rounded-2xl overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-[#1a2332]">
+          <div className="px-4 py-2.5 border-b border-[#1a2332] flex items-center justify-between">
             <span className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold">
               Estratégias
             </span>
+            <span className="text-[10px] text-gray-600">
+              {(signal.strategies as any[]).filter((s) => s.signal === "CALL").length} compra ·{" "}
+              {(signal.strategies as any[]).filter((s) => s.signal === "PUT").length} venda ·{" "}
+              {(signal.strategies as any[]).filter((s) => s.signal === "NEUTRO").length} neutro
+            </span>
           </div>
           <div className="divide-y divide-[#1a2332]">
-            {(signal.strategies as any[]).map((s, i) => (
-              <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="text-sm text-white font-medium">{s.name}</span>
-                  <span className="text-[11px] text-gray-500 ml-2 truncate">{s.description}</span>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "text-[10px] font-mono shrink-0",
-                    s.signal === "CALL"
-                      ? "bg-green-500/10 text-green-400 border-green-500/30"
-                      : s.signal === "PUT"
-                      ? "bg-red-500/10 text-red-400 border-red-500/30"
-                      : "bg-gray-500/10 text-gray-500 border-gray-500/20"
+            {(signal.strategies as any[]).map((s, i) => {
+              const isStratCall = s.signal === "CALL";
+              const isStratPut = s.signal === "PUT";
+              const strength = Math.min(100, Math.max(0, s.strength ?? 0));
+              return (
+                <div key={i} className="px-4 py-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-white font-bold">{s.name}</span>
+                      <span
+                        className={cn(
+                          "text-[11px] font-bold px-2 py-0.5 rounded font-mono",
+                          isStratCall && "bg-green-500/15 text-green-400",
+                          isStratPut && "bg-red-500/15 text-red-400",
+                          !isStratCall && !isStratPut && "bg-gray-500/10 text-gray-500"
+                        )}
+                      >
+                        {isStratCall ? "COMPRA" : isStratPut ? "VENDA" : "NEUTRO"}
+                      </span>
+                    </div>
+                    {strength > 0 && (
+                      <span className={cn(
+                        "text-xs font-mono font-bold",
+                        isStratCall ? "text-green-400" : isStratPut ? "text-red-400" : "text-gray-500"
+                      )}>
+                        {strength}%
+                      </span>
+                    )}
+                  </div>
+                  {/* Força da estratégia */}
+                  {strength > 0 && (
+                    <div className="w-full h-1 bg-[#1a2332] rounded-full overflow-hidden mb-1.5">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          isStratCall ? "bg-green-500" : isStratPut ? "bg-red-500" : "bg-gray-600"
+                        )}
+                        style={{ width: `${strength}%` }}
+                      />
+                    </div>
                   )}
-                >
-                  {s.signal}
-                </Badge>
-              </div>
-            ))}
+                  <p className="text-[11px] text-gray-500">{s.description}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -399,42 +470,27 @@ export default function Dashboard() {
       {history.length > 0 && (
         <div className="w-full max-w-sm mt-3 bg-[#0d1420] border border-[#1a2332] rounded-2xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-[#1a2332] flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold">
-              Histórico
-            </span>
+            <span className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold">Histórico</span>
             <button
               className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
-              onClick={() => {
-                setHistory([]);
-                saveHistory([]);
-                setSignalCount(0);
-              }}
+              onClick={() => { setHistory([]); saveHistory([]); setSignalCount(0); }}
             >
               limpar
             </button>
           </div>
           <div className="divide-y divide-[#1a2332]">
             {history.slice(0, 10).map((item) => (
-              <div
-                key={item.id}
-                className="px-4 py-3 flex items-center justify-between gap-2"
-              >
+              <div key={item.id} className="px-4 py-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-mono text-sm font-bold text-white truncate">
-                    {item.pair}
-                  </span>
-                  <span className="font-mono text-xs text-gray-600 hidden sm:inline">
-                    {item.price.toFixed(5)}
-                  </span>
+                  <span className="font-mono text-sm font-bold text-white truncate">{item.pair}</span>
+                  <span className="font-mono text-xs text-gray-600">{item.price.toFixed(5)}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-[11px] text-gray-600">{item.time}</span>
                   <span
                     className={cn(
                       "text-[11px] font-bold px-2 py-0.5 rounded font-mono",
-                      item.signal === "CALL"
-                        ? "bg-green-500/15 text-green-400"
-                        : "bg-red-500/15 text-red-400"
+                      item.signal === "CALL" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
                     )}
                   >
                     {item.signal === "CALL" ? "COMPRA" : "VENDA"}
