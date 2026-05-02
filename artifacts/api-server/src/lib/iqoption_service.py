@@ -219,6 +219,85 @@ def estrategia_estocastico(closes, highs, lows):
     
     return {"name": "Estocástico", "signal": "NEUTRO", "strength": 0, "description": f"%K={k:.1f}, %D={d:.1f} — Zona neutra"}
 
+def estrategia_vela_por_vela(candles):
+    """Análise vela por vela — padrões de reversão e continuação"""
+    if len(candles) < 5:
+        return {"name": "Vela x Vela", "signal": "NEUTRO", "strength": 0, "description": "Dados insuficientes"}
+    
+    recent = candles[-5:]
+    
+    def direcao(c):
+        if c['close'] > c['open']:
+            return 1
+        elif c['close'] < c['open']:
+            return -1
+        return 0
+    
+    dirs = [direcao(c) for c in recent]
+    last3 = dirs[-3:]
+    last2 = dirs[-2:]
+    
+    prev2 = recent[-2]
+    prev1 = recent[-1]
+    prev2_body = abs(prev2['close'] - prev2['open'])
+    prev1_body = abs(prev1['close'] - prev1['open'])
+    prev1_range = prev1['high'] - prev1['low']
+    
+    # 3 velas vermelhas consecutivas = CALL (reversão)
+    if last3 == [-1, -1, -1]:
+        strength = 80 if recent[-3]['close'] > recent[-2]['close'] > recent[-1]['close'] else 70
+        return {"name": "Vela x Vela", "signal": "CALL", "strength": strength,
+                "description": "3 velas de baixa — reversão de alta esperada"}
+    
+    # 3 velas verdes consecutivas = PUT (reversão)
+    if last3 == [1, 1, 1]:
+        strength = 80 if recent[-3]['close'] < recent[-2]['close'] < recent[-1]['close'] else 70
+        return {"name": "Vela x Vela", "signal": "PUT", "strength": strength,
+                "description": "3 velas de alta — reversão de baixa esperada"}
+    
+    # Engolfo de alta: vermelha → verde maior
+    if last2 == [-1, 1] and prev2_body > 0 and prev1_body > prev2_body * 1.3:
+        strength = min(85, 60 + (prev1_body / prev2_body - 1) * 30)
+        return {"name": "Vela x Vela", "signal": "CALL", "strength": round(strength, 1),
+                "description": "Engolfo de alta — compra forte"}
+    
+    # Engolfo de baixa: verde → vermelha maior
+    if last2 == [1, -1] and prev2_body > 0 and prev1_body > prev2_body * 1.3:
+        strength = min(85, 60 + (prev1_body / prev2_body - 1) * 30)
+        return {"name": "Vela x Vela", "signal": "PUT", "strength": round(strength, 1),
+                "description": "Engolfo de baixa — venda forte"}
+    
+    # Martelo: sombra inferior longa + corpo pequeno após queda = CALL
+    if prev1_range > 0:
+        lower_shadow = min(prev1['open'], prev1['close']) - prev1['low']
+        upper_shadow = prev1['high'] - max(prev1['open'], prev1['close'])
+        if lower_shadow > prev1_body * 2 and upper_shadow < prev1_body and dirs[-2] == -1:
+            return {"name": "Vela x Vela", "signal": "CALL", "strength": 72,
+                    "description": "Martelo — reversão de alta"}
+        # Estrela cadente: sombra superior longa após alta = PUT
+        if upper_shadow > prev1_body * 2 and lower_shadow < prev1_body and dirs[-2] == 1:
+            return {"name": "Vela x Vela", "signal": "PUT", "strength": 72,
+                    "description": "Estrela cadente — reversão de baixa"}
+        # Doji após tendência
+        if prev1_body < (prev1_range * 0.1 + 0.00001):
+            if dirs[-2] == -1:
+                return {"name": "Vela x Vela", "signal": "CALL", "strength": 58,
+                        "description": "Doji após baixa — reversão possível"}
+            elif dirs[-2] == 1:
+                return {"name": "Vela x Vela", "signal": "PUT", "strength": 58,
+                        "description": "Doji após alta — reversão possível"}
+    
+    # Continuação fraca
+    if last2 == [1, 1]:
+        return {"name": "Vela x Vela", "signal": "CALL", "strength": 42,
+                "description": "Continuação de alta"}
+    if last2 == [-1, -1]:
+        return {"name": "Vela x Vela", "signal": "PUT", "strength": 42,
+                "description": "Continuação de baixa"}
+    
+    return {"name": "Vela x Vela", "signal": "NEUTRO", "strength": 0,
+            "description": "Sem padrão definido"}
+
 def calcular_sinal_final(strategies):
     """Combina todas as estratégias com pesos para sinal final"""
     call_score = 0
@@ -230,7 +309,8 @@ def calcular_sinal_final(strategies):
         "MACD": 1.3,
         "Bollinger": 1.1,
         "EMA Cross": 1.4,
-        "Estocástico": 1.0
+        "Estocástico": 1.0,
+        "Vela x Vela": 1.5
     }
     
     for s in strategies:
@@ -266,7 +346,70 @@ def get_iqoption_api():
         from iqoptionapi.stable_api import IQ_Option
         return IQ_Option
     except ImportError:
+        pass
+    try:
+        from iqoptionapi.api import IQOptionAPI
+        return IQOptionAPI
+    except ImportError:
         return None
+
+def _login_iqoption_direct(email, password):
+    """Login direto na IQ Option usando o endpoint correto e retorna ssid + sessão."""
+    import requests as req
+    req.packages.urllib3.disable_warnings()
+    session = req.Session()
+    session.verify = False
+    
+    # Endpoint correto de login
+    r = session.post(
+        "https://auth.iqoption.com/api/v1.0/login",
+        json={"email": email, "password": password},
+        timeout=15
+    )
+    r.raise_for_status()
+    data = r.json()
+    ssid = data.get("data", {}).get("ssid") or data.get("ssid")
+    if not ssid:
+        raise Exception(f"SSID não retornado: {str(data)[:100]}")
+    return ssid, session
+
+def _get_profile_with_ssid(ssid):
+    """Busca perfil e saldo usando o SSID via cookie."""
+    import requests as req
+    req.packages.urllib3.disable_warnings()
+    try:
+        s = req.Session()
+        s.verify = False
+        s.cookies.set("ssid", ssid, domain="iqoption.com")
+        r = s.get("https://iqoption.com/api/getprofile", timeout=10)
+        if r.status_code == 200 and r.text:
+            data = r.json()
+            result = data.get("result", {})
+            # Tentar balances[] primeiro
+            balances = result.get("balances", [])
+            real_bal = next((b for b in balances if b.get("type") == 1), None)
+            if real_bal:
+                return {
+                    "balance": float(real_bal.get("amount", 0)),
+                    "currency": str(real_bal.get("currency", "USD")),
+                    "balance_id": real_bal.get("id")
+                }
+            if balances:
+                b = balances[0]
+                return {
+                    "balance": float(b.get("amount", 0)),
+                    "currency": str(b.get("currency", "USD")),
+                    "balance_id": b.get("id")
+                }
+            # Fallback: campo balance direto
+            return {
+                "balance": float(result.get("balance", 0)),
+                "currency": str(result.get("currency", "USD")),
+                "balance_id": result.get("balance_id")
+            }
+    except Exception:
+        pass
+    return {"balance": 0.0, "currency": "USD", "balance_id": None}
 
 PARES_OTC = [
     "EURUSD-OTC", "EURGBP-OTC", "EURJPY-OTC", "EURCAD-OTC", "EURAUD-OTC",
@@ -298,61 +441,56 @@ _account_info = {}
 
 def connect():
     global _iq, _connected, _account_info
-    IQ_Option = get_iqoption_api()
-    if IQ_Option is None:
-        return {"connected": False, "message": "Biblioteca iqoptionapi não encontrada"}
     
     email = os.environ.get("IQOPTION_EMAIL", "")
     password = os.environ.get("IQOPTION_PASSWORD", "")
     
     if not email or not password:
-        return {"connected": False, "message": "Credenciais não configuradas"}
+        return {"connected": False, "message": "Credenciais não configuradas (IQOPTION_EMAIL / IQOPTION_PASSWORD)"}
     
     try:
-        _iq = IQ_Option(email, password)
-        check, reason = _iq.connect()
-        if check:
-            _iq.change_balance("REAL")
-            balance = _iq.get_balance()
-            profile = _iq.get_profile_answermode()
-            _connected = True
-            _account_info = {
-                "balance": balance,
-                "currency": "USD",
-                "accountType": "REAL",
-                "email": email
-            }
-            return {
-                "connected": True,
-                "accountType": "REAL",
-                "balance": balance,
-                "currency": "USD",
-                "email": email,
-                "message": "Conectado com sucesso à conta REAL"
-            }
-        else:
-            _connected = False
-            return {"connected": False, "message": f"Falha na autenticação: {reason}"}
-    except Exception as e:
-        _connected = False
-        return {"connected": False, "message": f"Erro de conexão: {str(e)}"}
-
-def get_status():
-    global _iq, _connected, _account_info
-    if not _connected or _iq is None:
-        return {"connected": False, "message": "Não conectado"}
-    try:
-        balance = _iq.get_balance()
+        ssid, session = _login_iqoption_direct(email, password)
+        profile = _get_profile_with_ssid(ssid)
+        
+        _connected = True
+        _account_info = {
+            "ssid": ssid,
+            "balance": profile["balance"],
+            "currency": profile["currency"],
+            "accountType": "REAL",
+            "email": email
+        }
         return {
             "connected": True,
             "accountType": "REAL",
-            "balance": balance,
-            "currency": "USD",
-            "email": os.environ.get("IQOPTION_EMAIL", ""),
+            "balance": profile["balance"],
+            "currency": profile["currency"],
+            "email": email,
+            "message": "Conectado com sucesso à conta REAL"
+        }
+    except Exception as e:
+        _connected = False
+        err_msg = str(e)
+        if "401" in err_msg or "403" in err_msg or "password" in err_msg.lower() or "email" in err_msg.lower():
+            return {"connected": False, "message": f"Usuário ou senha inválidos: {err_msg[:100]}"}
+        if "timeout" in err_msg.lower() or "connection" in err_msg.lower() or "network" in err_msg.lower():
+            return {"connected": False, "message": f"Timeout — tente novamente: {err_msg[:100]}"}
+        return {"connected": False, "message": f"Erro de conexão: {err_msg[:150]}"}
+
+def get_status():
+    global _iq, _connected, _account_info
+    if _connected and _account_info:
+        return {
+            "connected": True,
+            "accountType": "REAL",
+            "balance": _account_info.get("balance", 0),
+            "currency": _account_info.get("currency", "USD"),
+            "email": _account_info.get("email", os.environ.get("IQOPTION_EMAIL", "")),
             "message": "Conectado"
         }
-    except:
-        return {"connected": False, "message": "Conexão perdida"}
+    # Tentar conectar automaticamente
+    result = connect()
+    return result
 
 def get_pairs_from_api(pair_type="all"):
     global _iq, _connected
@@ -454,7 +592,8 @@ def analyze_pair(pair, timeframe=60, candles=None):
         estrategia_macd(closes),
         estrategia_bollinger(closes, highs, lows),
         estrategia_ema_crossover(closes),
-        estrategia_estocastico(closes, highs, lows)
+        estrategia_estocastico(closes, highs, lows),
+        estrategia_vela_por_vela(candles)
     ]
     
     signal, confidence, entry_type = calcular_sinal_final(strategies)
