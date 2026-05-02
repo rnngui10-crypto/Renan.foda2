@@ -8,8 +8,8 @@ RUN apt-get update && \
 # Instala dependências Python para o serviço IQ Option
 RUN pip3 install requests websocket-client --break-system-packages
 
-# Instala pnpm
-RUN npm install -g pnpm@9
+# Instala pnpm (mesma versão do projeto)
+RUN npm install -g pnpm@10
 
 WORKDIR /app
 
