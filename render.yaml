@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: renan-foda
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: IQOPTION_EMAIL
+        sync: false
+      - key: IQOPTION_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
